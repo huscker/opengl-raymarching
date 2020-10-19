@@ -33,11 +33,14 @@ SOFTWARE.
 #include "misc/shader.hpp"
 
 GLFWwindow *window;
-glm::vec3 position(0,0,0);
+glm::vec3 position(0,0,5.0);
 float horizontalAngle = 3.14f;
 float verticalAngle = 0.0f;
+float slider1 = 0.0f;
+float slider2 = 0.0f;
 float mouseSpeed = 0.0005f;
 float speed = 15.0f;
+int input_mode = 0;
 #define WIDTH 1024
 #define HEIGHT 768
 
@@ -51,8 +54,29 @@ void updateInputs(){
 	// Get mouse position
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
-    horizontalAngle += mouseSpeed * float(WIDTH/2 - xpos );
-	verticalAngle   += mouseSpeed * float( HEIGHT/2 - ypos );
+    if (!input_mode){
+        horizontalAngle += mouseSpeed * float(WIDTH/2 - xpos );
+        verticalAngle   += mouseSpeed * float( HEIGHT/2 - ypos );
+        while(horizontalAngle > 6.28f){
+            horizontalAngle -= 6.28f;
+        }
+        while (horizontalAngle < -6.28f)
+        {
+            horizontalAngle += 6.28f;
+        }
+        while(verticalAngle > 1.57f){
+            verticalAngle = 1.57f;
+        }
+        while (verticalAngle < -1.57f)
+        {
+            verticalAngle =-1.57f;
+        }
+    }else if (input_mode == 1)
+    {
+        
+    }
+    
+    glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
 	glm::vec3 dir(
         cos(verticalAngle)*sin(horizontalAngle),
         sin(verticalAngle),
@@ -63,7 +87,6 @@ void updateInputs(){
         0,
         cos(horizontalAngle-3.14f/2.0f)
     );
-    glm::vec3 up = glm::cross(right,dir);
     if (glfwGetKey( window, GLFW_KEY_W ) == GLFW_PRESS){
 		position += dir * deltaTime * speed;
 	}
@@ -80,12 +103,19 @@ void updateInputs(){
 		position -= right * deltaTime * speed;
 	}
     if (glfwGetKey( window, GLFW_KEY_SPACE ) == GLFW_PRESS){
-		position += up * deltaTime * speed;
+		position += glm::vec3(0,1,0) * deltaTime * speed;
 	}
     if (glfwGetKey( window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS){
-		position -= up * deltaTime * speed;
+		position -= glm::vec3(0,1,0) * deltaTime * speed;
 	}
+    if (glfwGetKey(window,GLFW_KEY_Z) ==GLFW_PRESS){
+        input_mode = 1;
+    }
+    if (glfwGetKey(window,GLFW_KEY_Z) == GLFW_RELEASE){
+        input_mode = 0;
+    }
     lastTime = currentTime;
+    glfwPollEvents();
 }
 
 int main(){
@@ -110,7 +140,7 @@ int main(){
         printf("Failed to initialise GLEW\n");
         return -1;
     }
-    glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+    glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_FALSE);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwPollEvents();
     glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
@@ -137,13 +167,19 @@ int main(){
 	GLuint quad_programID = LoadShaders( "vertex.glsl", "fragment.glsl" );
     GLuint timeID = glGetUniformLocation(quad_programID,"time");
     GLuint posID = glGetUniformLocation(quad_programID,"pos");
+    GLuint cam_hor_angleID = glGetUniformLocation(quad_programID,"cam_hor_angle");
+    GLuint cam_ver_angleID = glGetUniformLocation(quad_programID,"cam_ver_angle");
     do{
+        //printf("%f %f %f\n",position[0],position[1],position[2]);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
         glUseProgram(quad_programID);
         glActiveTexture(GL_TEXTURE0);
-        glUniform1f(timeID,(float)(glfwGetTime())*10.0f);
+        glUniform1f(timeID,(float)(glfwGetTime())*1.0f);
         updateInputs();
-        glUniform2fv(posID,1,&position[0]);
+        glUniform3fv(posID,1,&position[0]);
+        glUniform1fv(cam_hor_angleID,1,&horizontalAngle);
+        //printf("%f\n",verticalAngle);
+        glUniform1fv(cam_ver_angleID,1,&verticalAngle);
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER,quad_vertexbuffer);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,(void*)0);
