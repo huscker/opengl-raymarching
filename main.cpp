@@ -36,10 +36,14 @@ GLFWwindow *window;
 glm::vec3 position(0,0,5.0);
 float horizontalAngle = 3.14f;
 float verticalAngle = 0.0f;
-float slider1 = 0.0f;
-float slider2 = 0.0f;
+float slider1 = 3.14f/2;
+float slider2 = 1.0f;
+float slider3 = 1.0f;
+float slider4 = 1.0f;
+float slider5 = 1.0f;
+float slider6 = 1.0f;
 float mouseSpeed = 0.0005f;
-float speed = 15.0f;
+float speed = 1.0f;
 int input_mode = 0;
 #define WIDTH 1024
 #define HEIGHT 768
@@ -54,7 +58,7 @@ void updateInputs(){
 	// Get mouse position
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
-    if (!input_mode){
+    if (input_mode == 0){
         horizontalAngle += mouseSpeed * float(WIDTH/2 - xpos );
         verticalAngle   += mouseSpeed * float( HEIGHT/2 - ypos );
         while(horizontalAngle > 6.28f){
@@ -73,7 +77,18 @@ void updateInputs(){
         }
     }else if (input_mode == 1)
     {
-        
+        slider1 += mouseSpeed * float(WIDTH/2 - xpos );
+        slider2   += mouseSpeed * float( HEIGHT/2 - ypos );
+    }
+    else if (input_mode == 2)
+    {
+        slider3 += mouseSpeed * float(WIDTH/2 - xpos );
+        slider4   += mouseSpeed * float( HEIGHT/2 - ypos );
+    }
+    else if (input_mode == 3)
+    {
+        slider5 += mouseSpeed * float(WIDTH/2 - xpos );
+        slider6   += mouseSpeed * float( HEIGHT/2 - ypos );
     }
     
     glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
@@ -111,8 +126,20 @@ void updateInputs(){
     if (glfwGetKey(window,GLFW_KEY_Z) ==GLFW_PRESS){
         input_mode = 1;
     }
-    if (glfwGetKey(window,GLFW_KEY_Z) == GLFW_RELEASE){
-        input_mode = 0;
+    
+    if (glfwGetKey(window,GLFW_KEY_X) ==GLFW_PRESS){
+        input_mode = 2;
+    }
+    
+    if (glfwGetKey(window,GLFW_KEY_C) ==GLFW_PRESS){
+        input_mode = 3;
+    }
+    if (glfwGetKey(window,GLFW_KEY_C) == GLFW_RELEASE){
+        if (glfwGetKey(window,GLFW_KEY_X) == GLFW_RELEASE){
+            if (glfwGetKey(window,GLFW_KEY_Z) == GLFW_RELEASE){
+                input_mode = 0;
+            }
+        }
     }
     lastTime = currentTime;
     glfwPollEvents();
@@ -169,8 +196,13 @@ int main(){
     GLuint posID = glGetUniformLocation(quad_programID,"pos");
     GLuint cam_hor_angleID = glGetUniformLocation(quad_programID,"cam_hor_angle");
     GLuint cam_ver_angleID = glGetUniformLocation(quad_programID,"cam_ver_angle");
+    GLuint slider1ID = glGetUniformLocation(quad_programID,"slider1");
+    GLuint slider2ID = glGetUniformLocation(quad_programID,"slider2");
+    GLuint slider3ID = glGetUniformLocation(quad_programID,"slider3");
+    GLuint slider4ID = glGetUniformLocation(quad_programID,"slider4");
+    GLuint slider5ID = glGetUniformLocation(quad_programID,"slider5");
+    GLuint slider6ID = glGetUniformLocation(quad_programID,"slider6");
     do{
-        //printf("%f %f %f\n",position[0],position[1],position[2]);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
         glUseProgram(quad_programID);
         glActiveTexture(GL_TEXTURE0);
@@ -178,8 +210,13 @@ int main(){
         updateInputs();
         glUniform3fv(posID,1,&position[0]);
         glUniform1fv(cam_hor_angleID,1,&horizontalAngle);
-        //printf("%f\n",verticalAngle);
         glUniform1fv(cam_ver_angleID,1,&verticalAngle);
+        glUniform1fv(slider1ID,1,&slider1);
+        glUniform1fv(slider2ID,1,&slider2);
+        glUniform1fv(slider3ID,1,&slider3);
+        glUniform1fv(slider4ID,1,&slider4);
+        glUniform1fv(slider5ID,1,&slider5);
+        glUniform1fv(slider6ID,1,&slider6);
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER,quad_vertexbuffer);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,(void*)0);
