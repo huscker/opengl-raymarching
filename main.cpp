@@ -33,7 +33,7 @@ SOFTWARE.
 #include "misc/shader.hpp"
 
 GLFWwindow *window;
-glm::vec3 position(0,0,5.0);
+glm::vec3 position(0,0,2.0);
 float horizontalAngle = 3.14f;
 float verticalAngle = 0.0f;
 float slider1 = 3.14f/2;
@@ -43,8 +43,11 @@ float slider4 = 1.0f;
 float slider5 = 1.0f;
 float slider6 = 1.0f;
 float mouseSpeed = 0.0005f;
-float speed = 1.0f;
+float speed = 0.3f;
+float sprint_speed = 1.0f;
+bool isSprinting = false;
 int input_mode = 0;
+
 #define WIDTH 1024
 #define HEIGHT 768
 
@@ -102,6 +105,9 @@ void updateInputs(){
         0,
         cos(horizontalAngle-3.14f/2.0f)
     );
+    if(isSprinting){
+        speed += sprint_speed;
+    }
     if (glfwGetKey( window, GLFW_KEY_W ) == GLFW_PRESS){
 		position += dir * deltaTime * speed;
 	}
@@ -120,9 +126,18 @@ void updateInputs(){
     if (glfwGetKey( window, GLFW_KEY_SPACE ) == GLFW_PRESS){
 		position += glm::vec3(0,1,0) * deltaTime * speed;
 	}
-    if (glfwGetKey( window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS){
+    if (glfwGetKey( window, GLFW_KEY_LEFT_CONTROL ) == GLFW_PRESS){
 		position -= glm::vec3(0,1,0) * deltaTime * speed;
 	}
+    if(isSprinting){
+        speed -= sprint_speed;
+    }
+    if (glfwGetKey( window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS){
+        isSprinting = true;
+    }
+    if (glfwGetKey( window, GLFW_KEY_LEFT_SHIFT ) == GLFW_RELEASE){
+        isSprinting = false;
+    }
     if (glfwGetKey(window,GLFW_KEY_Z) ==GLFW_PRESS){
         input_mode = 1;
     }
@@ -142,7 +157,7 @@ void updateInputs(){
         }
     }
     lastTime = currentTime;
-    glfwPollEvents();
+    glfwWaitEvents();
 }
 
 int main(){
@@ -167,7 +182,7 @@ int main(){
         printf("Failed to initialise GLEW\n");
         return -1;
     }
-    glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_FALSE);
+    glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwPollEvents();
     glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);

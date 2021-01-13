@@ -39,9 +39,9 @@ uniform float slider4;
 uniform float slider5;
 uniform float slider6;
 
-const int MAX_ITERS = 300;
+const int MAX_ITERS = 150;
 const float MIN_DIST = 0.001;
-const float MAX_DIST = 300.0;
+const float MAX_DIST = 100.0;
 const float EPSILON = 0.0001;
 const float MAX_SHADOW_DIST = 50.0;
 const float MIN_SHADOW_DIST = 0.01;
@@ -49,8 +49,11 @@ const float SHADOW_EPSILON = 0.001;
 const float MAX_AO_ITERS = 10;
 const float AO_EPSILON = 0.01;
 const float AO_COEFICIENT = 0.1;
+const float MANDELBULB_ITERS = 100;
+const float MANDELBULB_POWER = 8;
 const vec3 global_light_pos = vec3(1000,1000,-500);
 
+int rayMarcherIters = -1;
 
 mat4 rotationMatrix(vec3 axis, float angle)
 {
@@ -63,6 +66,30 @@ mat4 rotationMatrix(vec3 axis, float angle)
                 oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
                 oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
                 0.0,                                0.0,                                0.0,                                1.0);
+}
+vec3 opPlaneFold(vec3 p, vec3 n, float d) {
+    return p - 2.0 * min(0.0, dot(p.xyz, n) - d) * n;
+}
+vec3 boxFold(vec3 p, vec3 r) {
+    return clamp(p, -r, r) * 2.0 - p;
+}
+vec3 sierpinskiFold(inout vec3 p) {
+	p.xy -= min(p.x + p.y, 0.0);
+	p.xz -= min(p.x + p.z, 0.0);
+	p.yz -= min(p.y + p.z, 0.0);
+    return p;
+}
+vec3 opMengerFold(vec3 p){
+    float a = min(p.x - p.y, 0.0);
+	p.x -= a;
+	p.y += a;
+	a = min(p.x - p.z, 0.0);
+	p.x -= a;
+	p.z += a;
+	a = min(p.y - p.z, 0.0);
+	p.y -= a;
+	p.z += a;
+    return p;
 }
 vec3 opRep(vec3 p, vec3 c)
 {
@@ -113,38 +140,8 @@ float boxSDF( vec3 p, vec3 b )
   vec3 q = abs(p) - b;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
-float menger_spongeSDF(vec3 p,int n){ // in production
-    
-    float box = boxSDF(p,vec3(1.5,1.5,1.5));
-    float s = 0.5;
-    vec3 temp = (opSymXYZ(p)-vec3(1,1,1))/s;
 
-    float main_cross = boxSDF(p,vec3(2,0.33,0.33));
-    main_cross = unionSDF(main_cross,boxSDF(p,vec3(0.33,2,0.33)));
-    main_cross = unionSDF(main_cross,boxSDF(p,vec3(0.33,0.33,2)));
-
-    float cross = boxSDF(temp,vec3(2,0.33,0.33))*s;
-    cross = unionSDF(cross,boxSDF(temp,vec3(0.33,2,0.33))*s);
-    cross = unionSDF(cross,boxSDF(temp,vec3(0.33,0.33,2))*s);
-
-    temp = (opSymXYZ(p)-vec3(1,0,1))/s;
-    float cross2 = boxSDF(temp,vec3(2,0.33,0.33))*s;
-    cross2 = unionSDF(cross2,boxSDF(temp,vec3(0.33,2,0.33))*s);
-    cross2 = unionSDF(cross2,boxSDF(temp,vec3(0.33,0.33,2))*s);
-
-    temp = (opSymXYZ(p)-vec3(1,1,0))/s;
-    float cross3 = boxSDF(temp,vec3(2,0.33,0.33))*s;
-    cross3 = unionSDF(cross3,boxSDF(temp,vec3(0.33,2,0.33))*s);
-    cross3 = unionSDF(cross3,boxSDF(temp,vec3(0.33,0.33,2))*s);
-
-    temp = (opSymXYZ(p)-vec3(0,1,1))/s;
-    float cross4 = boxSDF(temp,vec3(2,0.33,0.33))*s;
-    cross4 = unionSDF(cross4,boxSDF(temp,vec3(0.33,2,0.33))*s);
-    cross4 = unionSDF(cross4,boxSDF(temp,vec3(0.33,0.33,2))*s);
-
-    return differenceSDF(box,unionSDF(main_cross,unionSDF(cross,unionSDF(cross2,unionSDF(cross3,cross4)))));
-}
-vec4 menger_spong_inigo_quiles(vec3 p )
+vec4 menger_spong_inigo_quilez(vec3 p )
 {
    float d = boxSDF(p,vec3(1.0));
    vec4 res = vec4( d, 1.0, 0.0, 0.0 );
@@ -170,8 +167,45 @@ vec4 menger_spong_inigo_quiles(vec3 p )
 
    return res;
 }
+float mandelbulb(vec3 p){
+    vec3 z = p;
+    float dr = 1.0;
+    float r = 0.0;
+    int i;
+    for(i = 0;i<MANDELBULB_ITERS;i++){
+        r = length(z);
+        if(r>2.0){break;}
+        float theta = acos(z.z/r);
+        float phi = atan(z.y,z.x);
+        dr = pow(r,MANDELBULB_POWER-1.0)*MANDELBULB_POWER*dr+1.0;
+        float zr = pow(r,MANDELBULB_POWER);
+        theta *= MANDELBULB_POWER;
+        phi *= MANDELBULB_POWER;
+        z = zr*vec3(
+            sin(theta)*cos(phi),
+            sin(phi)*sin(theta),
+            cos(theta)
+        );
+        z += p;
+        z=opSymX(z);
+    }
+    return 0.5*log(r)*r/dr;
+}
+float some_fractal(vec3 p){
+    for(int i =0;i<10;i++){
+        p.xyz = abs(p.xyz);
+        p = (rotationMatrix(vec3(1,0,0),sin(time/5))*vec4(p,0)).xyz;
+        opMengerFold(p);
+        p = (rotationMatrix(vec3(0,0,1),cos(time/7))*vec4(p,0)).xyz;
+    }
+    return menger_spong_inigo_quilez(p)[0];
+}
 float sceneSDF(vec3 p){
-    return menger_spong_inigo_quiles(p)[0];
+    //p = (rotationMatrix(vec3(sin(time),cos(time),0),time)*vec4(p,0)).xyz;
+    //p = opPlaneFold(p,vec3(1,0,0),slider4);
+    return menger_spong_inigo_quilez(p)[0];
+    //return menger_spong_inigo_quilez(p)[0];
+    //return mandelbulb(p);
 }
 
 vec3 estimateNormal(vec3 p) {
@@ -184,10 +218,13 @@ vec3 estimateNormal(vec3 p) {
 
 float rayMarcher(vec3 eye,vec3 dir,float start,float end,float step){
     float depth = start;
-    
-    for(int i =0;i<MAX_ITERS;i++){
+    int i;
+    for(i =0;i<MAX_ITERS;i++){
         float dist = sceneSDF(eye + depth * dir);
         if (dist < step){
+            if(rayMarcherIters==-1){
+                rayMarcherIters=i;
+            }
             return depth;
         }
         depth += dist;
@@ -227,6 +264,13 @@ vec3 phongContribForLight(vec3 k_d, vec3 k_s, float alpha, vec3 p, vec3 eye,
     }
     return lightIntensity * (k_d * dotLN + k_s * pow(dotRV, alpha));
 }
+vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
+{
+    return a + b*cos( 6.28318*(c*t+d) );
+}
+vec3 coloring(vec3 p){
+    return palette(length(p)/slider5, vec3(0.5,0.5,0.5),vec3(0.5,0.5,0.5),vec3(2.0,1.0,0.0),vec3(0.5,0.20,0.25));
+}
 
 vec3 lightning(vec3 k_a, vec3 k_d, vec3 k_s, float alpha, vec3 p, vec3 eye) {
     const vec3 ambientLight = 0.5 * vec3(1.0, 1.0, 1.0);
@@ -238,21 +282,23 @@ vec3 lightning(vec3 k_a, vec3 k_d, vec3 k_s, float alpha, vec3 p, vec3 eye) {
         
     
     //AO
-    color *= ambient_occlusion(p,estimateNormal(p));
+    //color *= ambient_occlusion(p,estimateNormal(p));
+    //AO cheap
+    color *= (1-float(rayMarcherIters)/float(MAX_ITERS-1));
     //shadow
+    /*
     if (rayMarcher(p,normalize(global_light_pos-p),MIN_SHADOW_DIST,MAX_SHADOW_DIST,SHADOW_EPSILON) < MAX_SHADOW_DIST-SHADOW_EPSILON){
         return color;
     }
-
+    */
 
     //point source
     //vec3 light1Intensity = vec3(1,1,1)*0.5 / sqrt(length(p-global_light_pos));
     //sun light
+    /*
     vec3 light1Intensity = vec3(1,1,1)*0.5;
-    color += phongContribForLight(k_d, k_s, alpha, p, eye,
-                                  global_light_pos,
-                                  light1Intensity);
-       
+    color += phongContribForLight(k_d, k_s, alpha, p, eye,global_light_pos,light1Intensity);
+    */
     return color;
 }
 
@@ -274,10 +320,11 @@ void main(){
 
     vec3 p = eye + dist * dir;
 
-    vec3 ambientColor = vec3(0.2,0.2,0.2);
+    vec3 ambientColor = vec3(0.2,0.6,1)*1;
     vec3 diffuseColor = vec3(0.332,0.664,1.0);
     vec3 specularColor = vec3(1,1,1);
-    float shininess = 10.0;
-
+    float shininess = 10;
+    //color = coloring(p);
     color = lightning(ambientColor,diffuseColor,specularColor,shininess,p,eye);
+    //color = lightning(ambientColor,diffuseColor,specularColor,shininess,p,eye);
 }
